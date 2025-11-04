@@ -16,14 +16,19 @@ const lift = 0.35;
 const downForce = 0.35;
 const windBase = 0.12;
 
+// --- Game state ---
+let gameOver = false;
+
 // --- Wind system ---
 let gust = 0;
 let windDir = 0;
 
 // --- Yank system ---
-const yankStrength = 5;
 const yankPointX = window.innerWidth / 2;
 const yankPointY = window.innerHeight * 0.75;
+const maxYankStrength = 80;
+const maxHoldTime = 3000; // ms
+let yankStartTime = null;
 
 // --- Input tracking ---
 const keysDown = {};
@@ -70,33 +75,68 @@ function resetGame() {
     velY = -1;
     windDir = 0;
     gust = 0;
+    yankStartTime = null;
     gameStartTime = Date.now();
+    gameOver = false; // ✅ Reset flag so loop runs again
     Util.setPositionPixels(kiteX, kiteY, kite);
 }
 
 // --- Yank mechanic ---
-function yankKite() {
+function yankKite(strength) {
     const dx = yankPointX - kiteX;
     const dy = yankPointY - kiteY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     const dirX = dx / distance;
     const dirY = dy / distance;
-    velX += dirX * yankStrength;
-    velY += dirY * yankStrength;
+    velX += dirX * strength;
+    velY += dirY * strength;
 }
 
-// --- Event listeners ---
+// --- Input listeners ---
 document.addEventListener("keydown", e => {
-    keysDown[e.key.toLowerCase()] = true;
-    if (e.key === " ") yankKite();
+    const key = e.key.toLowerCase();
+    keysDown[key] = true;
+
+    if (key === " " && yankStartTime === null) {
+        yankStartTime = Date.now();
+    }
+
+    // ✅ Allow restart with R (and ensure game restarts properly)
+    if (key === "r" && gameOver) {
+        resetGame();
+        loop();
+    }
 });
 
 document.addEventListener("keyup", e => {
-    keysDown[e.key.toLowerCase()] = false;
+    const key = e.key.toLowerCase();
+    keysDown[key] = false;
+
+    if (key === " " && yankStartTime !== null) {
+        const heldDuration = Date.now() - yankStartTime;
+        const yankPower = Math.min(heldDuration / maxHoldTime, 1) * maxYankStrength;
+        yankKite(yankPower);
+        yankStartTime = null;
+    }
 });
+
+// --- End game ---
+function endGame(message) {
+    if (gameOver) return; // prevent double triggers
+    gameOver = true;
+    alert(message);
+
+    // Optional auto-restart after 1.5 seconds
+    setTimeout(() => {
+        resetGame();
+        loop();
+    }, 1500);
+}
 
 // --- Main game loop ---
 function loop() {
+    if (gameOver) return;
+
     const time = Date.now() / 1000;
     const baseWind = Math.sin(time * 0.3);
     gust += (Math.random() - 0.5) * 0.05;
@@ -122,19 +162,37 @@ function loop() {
 
     const kiteSize = 100;
     const groundY = (window.innerHeight * 2) / 3;
-    const elapsed = ((Date.now() - gameStartTime) / 1000).toFixed(1);
 
-    if (kiteY + kiteSize > groundY) {
-        alert(`💥 The kite hit the ground!\nYou lasted ${elapsed} seconds.`);
-        resetGame();
-    } else if (kiteY < 0 || kiteX < 0 || kiteX + kiteSize > window.innerWidth) {
-        alert(`🎈 Oh no! Your kite flew away!\nYou lasted ${elapsed} seconds.`);
-        resetGame();
+    // --- Collision detection for all edges ---
+    if (kiteY <= 0) {
+        kiteY = 0;
+        Util.setPositionPixels(kiteX, kiteY, kite);
+        endGame;
+        return;
     }
 
-    kiteX = Math.max(0, Math.min(window.innerWidth - kiteSize, kiteX));
-    kiteY = Math.max(0, Math.min(groundY - kiteSize, kiteY));
+    if (kiteX <= 0) {
+        kiteX = 0;
+        Util.setPositionPixels(kiteX, kiteY, kite);
+        endGame;
+        return;
+    }
 
+    if (kiteX + kiteSize >= window.innerWidth) {
+        kiteX = window.innerWidth - kiteSize;
+        Util.setPositionPixels(kiteX, kiteY, kite);
+        endGame;
+        return;
+    }
+
+    if (kiteY + kiteSize >= groundY) {
+        kiteY = groundY - kiteSize;
+        Util.setPositionPixels(kiteX, kiteY, kite);
+        endGame;
+        return;
+    }
+
+    // --- Continue motion ---
     Util.setPositionPixels(kiteX, kiteY, kite);
     Util.setRotation(velX * 2, kite);
 
