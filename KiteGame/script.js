@@ -6,34 +6,51 @@ const ground = Util.createThing("Ground");
 const kite = Util.createThing("Kite");
 
 // --- Physics variables ---
+
+//Kites current position
 let kiteX = window.innerWidth / 2;
 let kiteY = window.innerHeight / 2;
+
+// Horizontal and vertical speed
 let velX = 0;
 let velY = 0;
 
+//puls kite downward
 const gravity = 0.2;
+
+//Lift when pressing "up" key
 const lift = 0.35;
+
+//Additional downforce whn pressing down
 const downForce = 0.35;
-const windBase = 0.12;
+
+//Base strength of winds horizontal force
+const windBase = 0.20;
 
 // --- Game state ---
 let gameOver = false;
 
 // --- Wind system ---
+
+//random fluctuation of wind strength
 let gust = 0;
+// Random fluctuation of wind direction
 let windDir = 0;
 
 // --- Yank system ---
+
+//Position of yank point
 const yankPointX = window.innerWidth / 2;
 const yankPointY = window.innerHeight * 0.75;
+//Maximum yank force and maximum hold time
 const maxYankStrength = 80;
 const maxHoldTime = 3000; // ms
 let yankStartTime = null;
 
-// --- Input tracking ---
+// Keeping track of which keys are currently being held down
 const keysDown = {};
 
-// --- Timer ---
+// Tracks when game started
 let gameStartTime = 0;
 
 // --- Setup the scene ---
@@ -64,7 +81,6 @@ function createKite() {
     Util.setPositionPixels(kiteX, kiteY, kite);
     kite.style.borderRadius = "0";
     kite.style.position = "absolute";
-    kite.style.transformOrigin = "center";
 }
 
 // --- Reset game ---
@@ -93,77 +109,74 @@ function yankKite(strength) {
 }
 
 // --- Input listeners ---
+
+//checks if a key is pressed
 document.addEventListener("keydown", e => {
     const key = e.key.toLowerCase();
     keysDown[key] = true;
-
+// Starts timing the "yank"
     if (key === " " && yankStartTime === null) {
         yankStartTime = Date.now();
     }
-
-    // ✅ Allow restart with R (and ensure game restarts properly)
-    if (key === "r" && gameOver) {
-        resetGame();
-        loop();
-    }
+    
 });
+//When spacebar is released, calculate how long it was held down
 
 document.addEventListener("keyup", e => {
     const key = e.key.toLowerCase();
     keysDown[key] = false;
 
+//Calculates how long space bar was held down and convert into yank strength
     if (key === " " && yankStartTime !== null) {
         const heldDuration = Date.now() - yankStartTime;
         const yankPower = Math.min(heldDuration / maxHoldTime, 1) * maxYankStrength;
+       //Call the yank strength
         yankKite(yankPower);
+        //reset yank timer
         yankStartTime = null;
     }
 });
 
-// --- End game ---
-function endGame(message) {
-    if (gameOver) return; // prevent double triggers
-    gameOver = true;
-    alert(message);
-
-    // Optional auto-restart after 1.5 seconds
-    setTimeout(() => {
-        resetGame();
-        loop();
-    }, 1500);
-}
-
 // --- Main game loop ---
+
+//Stops updating if game is over
 function loop() {
     if (gameOver) return;
 
+    // Wind physics
+
     const time = Date.now() / 1000;
+    //Slowly changes wind
     const baseWind = Math.sin(time * 0.3);
+    //Adds random gusts of wind
     gust += (Math.random() - 0.5) * 0.05;
     gust = Math.max(-1, Math.min(1, gust));
     windDir = baseWind + gust;
     velX += windDir * windBase;
-
     velY += gravity;
 
+//Strength of arrow keys
     if (keysDown["arrowup"] || keysDown["w"]) velY -= lift;
     if (keysDown["arrowdown"] || keysDown["s"]) velY += downForce;
     if (keysDown["arrowleft"] || keysDown["a"]) velX -= 0.2;
     if (keysDown["arrowright"] || keysDown["d"]) velX += 0.2;
 
+// Moves the kite based on current velocity
     kiteX += velX;
     kiteY += velY;
 
+//Adds drag to kite
     velX *= 0.98;
     velY *= 0.98;
 
+//Clamping to stop kite from moving too fast
     velY = Math.max(-8, Math.min(8, velY));
     velX = Math.max(-5, Math.min(5, velX));
 
+    //Collision detection
     const kiteSize = 100;
     const groundY = (window.innerHeight * 2) / 3;
 
-    // --- Collision detection for all edges ---
     if (kiteY <= 0) {
         kiteY = 0;
         Util.setPositionPixels(kiteX, kiteY, kite);
